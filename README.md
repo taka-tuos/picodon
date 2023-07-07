@@ -1,53 +1,32 @@
-# nanotodon
-TUI/C99 Mastodon Client
+# picodon
+CLI Mastodon Client
+
+# Notice
+**※このソフトウェアは活発に開発中であり、基本的に壊れています**  
 
 # Depended library
 - cURL
-- ncursesw (should to see "How to build" section)
 - pthread
 
 # How to build
-## If you're using *BSD with pkgsrc
-```make -f Makefile.bsd```
-
-## If your package manager has ncursesw
-```make```
-
-## If your package manager don't have ncursesw (when ncursesw is combined in ncurses package)
-```make NCURSES=ncurces```
+ ```make```  
 
 # Options
 
 - ```-mono```  
- - Draw as monochrome mode.
+- モノクロモード(色付けをしない)
 
 - ```-unlock```  
-- Show UNLISTED/PRIVATE/DIRECT toots.
+- 非収載/非公開/ダイレクト投稿を表示
 
 - ```-noemoji```  
-- Remove emojis from UI.
+- 絵文字を使わない
 
 - ```-profile <name>```  
-- Use profile <name>.
+- プロファイル ``name`` を利用して起動
 
 - ```-timeline <public|local|home>```  
-- Select timeline(WIP, streaming on local/public may not work).
-
-# Tips
-## How to UNLISTED toot
-```/unlisted <your funny toot here>```
-
-## How to PRIVATE toot
-```/private <your funny toot here>```
-
-# Tested environments(outdated)
-- NetBSD/luna68k + mlterm
-- NetBSD/x68k + mlterm
-- NetBSD/sun3 + mlterm
-- ArchLinux + xfce terminal
-- WSL1 + mintty(wsl-terminal)
-- WSL2 + mintty(wsltty)
-- WSL1 + Windows Terminal
+- タイムライン選択(今は動きません)
 
 # Thanks
 - septag : author of sjson.h (https://github.com/septag/sjson)
