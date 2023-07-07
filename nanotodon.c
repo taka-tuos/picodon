@@ -5,8 +5,8 @@
 #include <time.h>   // strptime, strptime, timegm, localtime
 #include <ctype.h>  // isspace
 #include <locale.h> // setlocale
-#include <curses.h>
-#include <ncurses.h>
+//#include <curses.h>
+//#include <ncurses.h>
 #include <pthread.h>
 #include "config.h"
 #include "messages.h"
@@ -49,10 +49,10 @@ void stream_event_update(struct sjson_node *);
 void stream_event_notify(struct sjson_node *);
 
 // タイムラインWindow
-WINDOW *scr;
+//WINDOW *scr;
 
 // 投稿欄Window
-WINDOW *pad;
+//WINDOW *pad;
 
 // アクセストークン文字列
 char access_token[256];
@@ -123,7 +123,7 @@ int ustrwidth(const char *str)
 void curl_fatal(CURLcode ret, const char *errbuf)
 {
 	size_t len = strlen(errbuf);
-	endwin();
+	//endwin();
 	fprintf(stderr, "\n");
 	if(len>0) {
 		fprintf(stderr, "%s%s", errbuf, errbuf[len-1]!='\n' ? "\n" : "");
@@ -235,21 +235,21 @@ void stream_event_notify(struct sjson_node *jobj_from_string)
 	t[0] = toupper(t[0]);
 	
 	// 通知種別と誰からか[ screen_name(display_name) ]を表示
-	wattron(scr, COLOR_PAIR(4));
-	if(!noemojiflag) waddstr(scr, strcmp(t, "Follow") == 0 ? "👥" : strcmp(t, "Favourite") == 0 ? "💕" : strcmp(t, "Reblog") == 0 ? "🔃" : strcmp(t, "Mention") == 0 ? "🗨" : "");
-	waddstr(scr, t);
+	//wattron(scr, COLOR_PAIR(4));
+	if(!noemojiflag) fputs(strcmp(t, "Follow") == 0 ? "👥" : strcmp(t, "Favourite") == 0 ? "💕" : strcmp(t, "Reblog") == 0 ? "🔃" : strcmp(t, "Mention") == 0 ? "🗨" : "", stdout);
+	fputs(t, stdout);
 	free(t);
-	waddstr(scr, " from ");
-	waddstr(scr, screen_name->string_);
+	fputs(" from ", stdout);
+	fputs(screen_name->string_, stdout);
 	
 	dname = display_name->string_;
 	
 	// dname(display_name)が空の場合は括弧を表示しない
 	if (dname[0] != '\0') {
-		wprintw(scr, " (%s)", dname);
+		fprintf(stdout, " (%s)", dname);
 	}
-	waddstr(scr, "\n");
-	wattroff(scr, COLOR_PAIR(4));
+	fputs("\n", stdout);
+	//wattroff(scr, COLOR_PAIR(4));
 	
 	sjson_tag type;
 	
@@ -260,11 +260,11 @@ void stream_event_notify(struct sjson_node *jobj_from_string)
 		stream_event_update(status);
 	}
 	
-	waddstr(scr, "\n");
-	wrefresh(scr);
+	fputs("\n", stdout);
+	/*wrefresh(scr);
 	
 	wmove(pad, pad_x, pad_y);
-	wrefresh(pad);
+	wrefresh(pad);*/
 }
 
 // ストリーミングでのToot受信処理,stream_event_handlerへ代入
@@ -306,56 +306,56 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 	
 	// ブーストで回ってきた場合はその旨を表示
 	if(type != SJSON_NULL) {
-		wattron(scr, COLOR_PAIR(3));
-		if(!noemojiflag) waddstr(scr, "🔃 ");
-		waddstr(scr, "Reblog by ");
-		waddstr(scr, sname);
+		//wattron(scr, COLOR_PAIR(3));
+		if(!noemojiflag) fputs("🔃 ", stdout);
+		fputs("Reblog by ", stdout);
+		fputs(sname, stdout);
 		// dname(表示名)が空の場合は括弧を表示しない
-		if (dname[0] != '\0') wprintw(scr, " (%s)", dname);
-		waddstr(scr, "\n");
-		wattroff(scr, COLOR_PAIR(3));
+		if (dname[0] != '\0') fprintf(stdout, " (%s)", dname);
+		fputs("\n", stdout);
+		//wattroff(scr, COLOR_PAIR(3));
 		stream_event_update(reblog);
 		return;
 	}
 	
 	// 誰からか[ screen_name(display_name) ]を表示
-	wattron(scr, COLOR_PAIR(1)|A_BOLD);
-	waddstr(scr, sname);
-	wattroff(scr, COLOR_PAIR(1)|A_BOLD);
+	//wattron(scr, COLOR_PAIR(1)|A_BOLD);
+	fputs(sname, stdout);
+	//wattroff(scr, COLOR_PAIR(1)|A_BOLD);
 	
 	// dname(表示名)が空の場合は括弧を表示しない
 	if (dname[0] != '\0') {
-		wattron(scr, COLOR_PAIR(2));
-		wprintw(scr, " (%s)", dname);
-		wattroff(scr, COLOR_PAIR(2));
+		//wattron(scr, COLOR_PAIR(2));
+		fprintf(stdout, " (%s)", dname);
+		//wattroff(scr, COLOR_PAIR(2));
 	}
 	
 	if(strcmp(vstr, "public")) {
 		int vtyp = strcmp(vstr, "unlisted");
-		wattron(scr, COLOR_PAIR(3)|A_BOLD);
-		waddstr(scr, " ");
+		//wattron(scr, COLOR_PAIR(3)|A_BOLD);
+		fputs(" ", stdout);
 		if(noemojiflag) {
 			if(!strcmp(vstr, "unlisted")) {
-				waddstr(scr, "<UNLIST>");
+				fputs("<UNLIST>", stdout);
 			} else if(!strcmp(vstr, "private")) {
-				waddstr(scr, "<PRIVATE>");
+				fputs("<PRIVATE>", stdout);
 			} else {
-				waddstr(scr, "<!DIRECT!>");
+				fputs("<!DIRECT!>", stdout);
 			}
 		} else {
 			if(!strcmp(vstr, "unlisted")) {
-				waddstr(scr, "🔓");
+				fputs("🔓", stdout);
 			} else if(!strcmp(vstr, "private")) {
-				waddstr(scr, "🔒");
+				fputs("🔒", stdout);
 			} else {
-				waddstr(scr, "✉");
+				fputs("✉", stdout);
 			}
 		}
-		wattroff(scr, COLOR_PAIR(3)|A_BOLD);
+		//wattroff(scr, COLOR_PAIR(3)|A_BOLD);
 	}
 	
 	// 日付表示
-	date_w = ustrwidth(datebuf) + 1;
+	/*date_w = ustrwidth(datebuf) + 1;
 	getyx(scr, y, x);
 	if (x < term_w - date_w) {
 		for(int i = 0; i < term_w - x - date_w; i++) waddstr(scr, " ");
@@ -366,7 +366,9 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 	wattron(scr, COLOR_PAIR(5));
 	waddstr(scr, datebuf);
 	wattroff(scr, COLOR_PAIR(5));
-	waddstr(scr, "\n");
+	waddstr(scr, "\n");*/
+
+	fputs("\n", stdout);
 	
 	const char *src = content->string_;
 	
@@ -380,11 +382,11 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 		// タグならタグフラグを立てる
 		if(*src == '<') ltgt = 1;
 		
-		if(ltgt && strncmp(src, "<br", 3) == 0) waddch(scr, '\n');
+		if(ltgt && strncmp(src, "<br", 3) == 0) fputc('\n', stdout);
 		if(ltgt && strncmp(src, "<p", 2) == 0) {
 			pcount++;
 			if(pcount >= 2) {
-				waddstr(scr, "\n\n");
+				fputs("\n\n", stdout);
 			}
 		}
 		
@@ -393,39 +395,39 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 			// 文字実体参照の処理
 			if(*src == '&') {
 				if(strncmp(src, "&amp;", 5) == 0) {
-					waddch(scr, '&');
+					fputc('&', stdout);
 					src += 4;
 				}
 				else if(strncmp(src, "&lt;", 4) == 0) {
-					waddch(scr, '<');
+					fputc('<', stdout);
 					src += 3;
 				}
 				else if(strncmp(src, "&gt;", 4) == 0) {
-					waddch(scr, '>');
+					fputc('>', stdout);
 					src += 3;
 				}
 				else if(strncmp(src, "&quot;", 6) == 0) {
-					waddch(scr, '\"');
+					fputc('\"', stdout);
 					src += 5;
 				}
 				else if(strncmp(src, "&apos;", 6) == 0) {
-					waddch(scr, '\'');
+					fputc('\'', stdout);
 					src += 5;
 				}
 				else if(strncmp(src, "&#39;", 5) == 0) {
-					waddch(scr, '\'');
+					fputc('\'', stdout);
 					src += 4;
 				}
 			} else {
 				// 通常文字
-				waddch(scr, *((unsigned char *)src));
+				fputc(*((unsigned char *)src), stdout);
 			}
 		}
 		if(*src == '>') ltgt = 0;
 		src++;
 	}
 	
-	waddstr(scr, "\n");
+	fputs("\n", stdout);
 	
 	// 添付メディアのURL表示
 	struct sjson_node *media_attachments;
@@ -438,9 +440,9 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 			struct sjson_node *url;
 			read_json_fom_path(obj, "url", &url);
 			if(url->tag == SJSON_STRING) {
-				waddstr(scr, noemojiflag ? "<LINK>" : "🔗");
-				waddstr(scr, url->string_);
-				waddstr(scr, "\n");
+				fputs(noemojiflag ? "<LINK>" : "🔗", stdout);
+				fputs(url->string_, stdout);
+				fputs("\n", stdout);
 			}
 		}
 	}
@@ -457,23 +459,23 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 			int l = ustrwidth(application_name->string_);
 		
 			// 右寄せにするために空白を並べる
-			for(int i = 0; i < term_w - (l + 4 + 1); i++) waddstr(scr, " ");
+			for(int i = 0; i < term_w - (l + 4 + 1); i++) fputs(" ", stdout);
 			
-			wattron(scr, COLOR_PAIR(1));
-			waddstr(scr, "via ");
-			wattroff(scr, COLOR_PAIR(1));
-			wattron(scr, COLOR_PAIR(2));
-			waddstr(scr, application_name->string_);
-			waddstr(scr, "\n");
-			wattroff(scr, COLOR_PAIR(2));
+			//wattron(scr, COLOR_PAIR(1));
+			fputs("via ", stdout);
+			//wattroff(scr, COLOR_PAIR(1));
+			//wattron(scr, COLOR_PAIR(2));
+			fputs(application_name->string_, stdout);
+			fputs("\n", stdout);
+			//wattroff(scr, COLOR_PAIR(2));
 		}
 	}
 	
-	waddstr(scr, "\n");
-	wrefresh(scr);
+	fputs("\n", stdout);
+	/*wrefresh(scr);
 	
 	wmove(pad, pad_x, pad_y);
-	wrefresh(pad);
+	wrefresh(pad);*/
 }
 
 // ストリーミングで受信したJSON(接続維持用データを取り除き一体化したもの)
@@ -563,87 +565,6 @@ void *stream_thread_func(void *param)
 	
 	return NULL;
 }
-
-// <stb_textedit用宣言>
-
-#define STB_TEXTEDIT_CHARTYPE   wchar_t
-#define STB_TEXTEDIT_STRING     text_control
-
-// get the base type
-#include "stb_textedit.h"
-
-// define our editor structure
-typedef struct
-{
-	wchar_t *string;
-	int stringlen;
-} text_control;
-
-// define the functions we need
-void layout_func(StbTexteditRow *row, STB_TEXTEDIT_STRING *str, int start_i)
-{
-	int remaining_chars = str->stringlen - start_i;
-	row->num_chars = remaining_chars > 20 ? 20 : remaining_chars; // should do real word wrap here
-	row->x0 = 0;
-	row->x1 = 20; // need to account for actual size of characters
-	row->baseline_y_delta = 1.25;
-	row->ymin = -1;
-	row->ymax = 0;
-}
-
-int delete_chars(STB_TEXTEDIT_STRING *str, int pos, int num)
-{
-	memmove(&str->string[pos], &str->string[pos + num], (str->stringlen - (pos + num)) * sizeof(wchar_t));
-	str->stringlen -= num;
-	return 1;
-}
-
-int insert_chars(STB_TEXTEDIT_STRING *str, int pos, STB_TEXTEDIT_CHARTYPE *newtext, int num)
-{
-	str->string = (wchar_t *)realloc(str->string, (str->stringlen + num) * sizeof(wchar_t));
-	memmove(&str->string[pos + num], &str->string[pos], (str->stringlen - pos) * sizeof(wchar_t));
-	memcpy(&str->string[pos], newtext, (num) * sizeof(wchar_t));
-	str->stringlen += num;
-	return 1;
-}
-
-// define all the #defines needed 
-
-#define STB_TEXTEDIT_STRINGLEN(tc)     ((tc)->stringlen)
-#define STB_TEXTEDIT_LAYOUTROW         layout_func
-#define STB_TEXTEDIT_GETWIDTH(tc,n,i)  (1) // quick hack for monospaced
-#define STB_TEXTEDIT_KEYTOTEXT(key)    (key)
-#define STB_TEXTEDIT_GETCHAR(tc,i)     ((tc)->string[i])
-#define STB_TEXTEDIT_NEWLINE           '\n'
-#define STB_TEXTEDIT_IS_SPACE(ch)      isspace(ch)
-#define STB_TEXTEDIT_DELETECHARS       delete_chars
-#define STB_TEXTEDIT_INSERTCHARS       insert_chars
-
-#define STB_TEXTEDIT_K_SHIFT           0xffff0100
-#define STB_TEXTEDIT_K_CONTROL         0xffff0200
-#define STB_TEXTEDIT_K_LEFT            KEY_LEFT
-#define STB_TEXTEDIT_K_RIGHT           KEY_RIGHT
-#define STB_TEXTEDIT_K_UP              KEY_UP
-#define STB_TEXTEDIT_K_DOWN            KEY_DOWN
-#define STB_TEXTEDIT_K_LINESTART       KEY_HOME
-#define STB_TEXTEDIT_K_LINEEND         KEY_END
-#define STB_TEXTEDIT_K_TEXTSTART       KEY_SHOME
-#define STB_TEXTEDIT_K_TEXTEND         KEY_SEND
-#define STB_TEXTEDIT_K_DELETE          KEY_DC
-#define STB_TEXTEDIT_K_BACKSPACE       0x7f
-#define STB_TEXTEDIT_K_BACKSPACE_ALT   0x107
-#define STB_TEXTEDIT_K_UNDO            KEY_UNDO
-#define STB_TEXTEDIT_K_REDO            KEY_REDO
-#define STB_TEXTEDIT_K_INSERT          0xffff0400
-#define STB_TEXTEDIT_K_WORDLEFT        0xffff0800
-#define STB_TEXTEDIT_K_WORDRIGHT       0xffff1000
-#define STB_TEXTEDIT_K_PGUP            KEY_PPAGE
-#define STB_TEXTEDIT_K_PGDOWN          KEY_NPAGE
-
-#define STB_TEXTEDIT_IMPLEMENTATION
-#include "stb_textedit.h"
-
-// </stb_textedit用宣言>
 
 // インスタンスにクライアントを登録する
 void do_create_client(char *domain, char *dot_ckcs)
@@ -1116,13 +1037,13 @@ retry1:
 	
 	setlocale(LC_ALL, "");
 	
-	WINDOW *term = initscr();
+	//WINDOW *term = initscr();
 	
-	start_color();
+	//start_color();
 	
-	use_default_colors();
+	//use_default_colors();
 
-	if(!monoflag) {
+	/*if(!monoflag) {
 		init_pair(1, COLOR_GREEN, -1);
 		init_pair(2, COLOR_CYAN, -1);
 		init_pair(3, COLOR_YELLOW, -1);
@@ -1134,41 +1055,41 @@ retry1:
 		init_pair(3, -1, -1);
 		init_pair(4, -1, -1);
 		init_pair(5, -1, -1);
-	}
+	}*/
 	
-	getmaxyx(term, term_h, term_w);
+	//getmaxyx(term, term_h, term_w);
 	
 	// TL用Window
-	scr = newwin(term_h - 6, term_w, 6, 0);
+	//scr = newwin(term_h - 6, term_w, 6, 0);
 	
 	// 投稿欄用Window
-	pad = newwin(5, term_w, 0, 0);
+	//pad = newwin(5, term_w, 0, 0);
 	
-	scrollok(scr, 1);
+	//scrollok(scr, 1);
 	
-	wrefresh(scr);
+	//wrefresh(scr);
 	
 	pthread_t stream_thread;
 	
 	// ストリーミングスレッド生成
 	pthread_create(&stream_thread, NULL, stream_thread_func, NULL);
 	
-	STB_TexteditState state;
-	text_control txt;
+	//STB_TexteditState state;
+	//text_control txt;
 
-	txt.string = 0;
-	txt.stringlen = 0;
+	//txt.string = 0;
+	//txt.stringlen = 0;
 
-	stb_textedit_initialize_state(&state, 0);
+	//stb_textedit_initialize_state(&state, 0);
 	
-	keypad(pad, TRUE);
-	noecho();
+	//keypad(pad, TRUE);
+	//noecho();
 	
 	// 投稿欄との境目の線
-	attron(COLOR_PAIR(2));
+	/*attron(COLOR_PAIR(2));
 	for(int i = 0; i < term_w; i++) mvaddch(5, i, '-');
 	attroff(COLOR_PAIR(2));
-	refresh();
+	refresh();*/
 	
 	/*mvaddch(0, term_w/2, '[');
 	attron(COLOR_PAIR(1));
@@ -1187,7 +1108,7 @@ retry1:
 	
 	while (1)
 	{
-		wchar_t c;
+		/*wchar_t c;
 		wget_wch(pad, &c);
 		if(c == KEY_RESIZE) {
 			// リサイズ処理
@@ -1247,7 +1168,7 @@ retry1:
 			pad_x = 0;
 			pad_y = 0;
 		}
-		wrefresh(pad);
+		wrefresh(pad);*/
 	}
 
 	return 0;
