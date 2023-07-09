@@ -368,6 +368,9 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 	wattroff(scr, COLOR_PAIR(5));
 	waddstr(scr, "\n");*/
 
+	fputs(" - ", stdout);
+	fputs(datebuf, stdout);
+
 	fputs("\n", stdout);
 	
 	const char *src = content->string_;
@@ -462,7 +465,7 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 			for(int i = 0; i < term_w - (l + 4 + 1); i++) fputs(" ", stdout);
 			
 			//wattron(scr, COLOR_PAIR(1));
-			fputs("via ", stdout);
+			fputs("- via ", stdout);
 			//wattroff(scr, COLOR_PAIR(1));
 			//wattron(scr, COLOR_PAIR(2));
 			fputs(application_name->string_, stdout);
