@@ -592,7 +592,7 @@ void do_create_client(char *domain, char *dot_ckcs)
 	memset(errbuf, 0, sizeof errbuf);
 	curl_formadd(&post1, &postend,
 				CURLFORM_COPYNAME, "client_name",
-				CURLFORM_COPYCONTENTS, "nanotodon",
+				CURLFORM_COPYCONTENTS, "picodon",
 				CURLFORM_END);
 	curl_formadd(&post1, &postend,
 				CURLFORM_COPYNAME, "redirect_uris",

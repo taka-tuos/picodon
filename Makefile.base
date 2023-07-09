@@ -1,5 +1,5 @@
-TARGET		= nanotodon
-OBJS_TARGET	= nanotodon.o config.o messages.o
+TARGET		= picodon
+OBJS_TARGET	= picodon.o config.o messages.o
 
 CFLAGS = -g
 # optimization

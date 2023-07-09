@@ -67,7 +67,7 @@ static int init_xdg(struct nanotodon_config *config, const char* xdg_config_home
 		return make_home_result;
 	}
 
-	if (snprintf(config->root_dir, sizeof(config->root_dir), "%s/nanotodon", xdg_config_home) >= sizeof(config->root_dir)) {
+	if (snprintf(config->root_dir, sizeof(config->root_dir), "%s/picodon", xdg_config_home) >= sizeof(config->root_dir)) {
 		fprintf(stderr, "FATAL: Can't allocate memory. Too long filename.\n");
 		exit(EXIT_FAILURE);
 	}
@@ -97,7 +97,7 @@ int nano_config_init(struct nanotodon_config *config)
 #endif
 
 	// $HOME/.nanotodon
-	if (snprintf(config->root_dir, sizeof(config->root_dir), "%s/.nanotodon", homepath) >= sizeof(config->root_dir)) {
+	if (snprintf(config->root_dir, sizeof(config->root_dir), "%s/.picodon", homepath) >= sizeof(config->root_dir)) {
 		goto buffer_err;
 	}
 	make_config_dir_or_die(config->root_dir);
