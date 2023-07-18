@@ -1,6 +1,7 @@
 #include <curl/curl.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <string.h> // memmove
 #include <time.h>   // strptime, strptime, timegm, localtime
 #include <ctype.h>  // isspace
@@ -267,6 +268,113 @@ void stream_event_notify(struct sjson_node *jobj_from_string)
 	wrefresh(pad);*/
 }
 
+// TODO：安全性のかけらもないのでそのうち直す
+typedef struct {
+	int siz;
+	char *buf;
+	int ptr;
+} strbuf_t;
+
+void strbuf_init(strbuf_t *obj)
+{
+	obj->siz = 4096;
+	obj->buf = (char *)malloc(4096);
+	obj->ptr = 0;
+}
+
+void strbuf_puts(char *s, strbuf_t *obj)
+{
+	if(strlen(s) + 1 + obj->ptr > obj->siz) {
+		obj->buf = (char *)realloc(obj->buf, obj->siz + 4096);
+		obj->siz += 4096;
+	}
+
+	memcpy(obj->buf + obj->ptr, s, strlen(s) + 1);
+	obj->ptr += strlen(s);
+}
+
+void strbuf_putc(char c, strbuf_t *obj)
+{
+	char s[2] = { 0, 0 };
+	s[0] = c;
+
+	strbuf_puts(s, obj);
+}
+
+typedef struct {
+	int front, rear, count, size;
+  	uintptr_t *buf;
+	pthread_mutex_t mutex;
+} ptrqueue_t;
+
+void ptrqueue_init(ptrqueue_t *obj)
+{
+	obj->front = 0;
+    obj->rear = 0;
+    obj->count = 0;
+	obj->buf = (uintptr_t *)malloc(sizeof(uintptr_t) * 1024);
+	obj->size = 1024;
+
+	pthread_mutex_init(&(obj->mutex), NULL);
+}
+
+int ptrqueue_is_full(ptrqueue_t *obj)
+{
+	return obj->count == obj->size ? 1 : 0;
+}
+
+int ptrqueue_is_empty(ptrqueue_t *obj)
+{
+	return obj->count == 0 ? 1 : 0;
+}
+
+int ptrqueue_enqueue(void *ptr, ptrqueue_t *obj)
+{
+	uintptr_t p = (uintptr_t)ptr;
+
+	int ret = 0;
+
+	pthread_mutex_lock(&(obj->mutex));
+
+	if (ptrqueue_is_full(obj)) {
+		ret = 1;
+	} else {
+		obj->buf[obj->rear++] = p;
+		obj->count++;
+		if (obj->rear == obj->size)
+			obj->rear = 0;
+	}
+
+	pthread_mutex_unlock(&(obj->mutex));
+
+	return ret;
+}
+
+uintptr_t ptrqueue_dequeue(ptrqueue_t *obj, int *err)
+{
+	pthread_mutex_lock(&(obj->mutex));
+
+	uintptr_t ret = NULL;
+
+	if (ptrqueue_is_empty(obj)) {
+		if(err != NULL) *err = 1;
+		ret = NULL;
+	} else {
+		uintptr_t p = obj->buf[obj->front++];
+		obj->count--;
+		if(err != NULL) *err = 0;
+		if (obj->front == obj->size)
+			obj->front = 0;
+		ret = p;
+	}
+	
+	pthread_mutex_unlock(&(obj->mutex));
+
+	return ret;
+}
+
+ptrqueue_t gqueue;
+
 // ストリーミングでのToot受信処理,stream_event_handlerへ代入
 #define DATEBUFLEN	40
 void stream_event_update(struct sjson_node *jobj_from_string)
@@ -303,16 +411,26 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 	type = reblog->tag;
 	sname = screen_name->string_;
 	dname = display_name->string_;
+
+	strbuf_t sbuf;
+
+	strbuf_init(&sbuf);
 	
 	// ブーストで回ってきた場合はその旨を表示
 	if(type != SJSON_NULL) {
 		//wattron(scr, COLOR_PAIR(3));
-		if(!noemojiflag) fputs("🔃 ", stdout);
-		fputs("Reblog by ", stdout);
-		fputs(sname, stdout);
+		if(!noemojiflag) strbuf_puts("🔃 ", &sbuf);
+		strbuf_puts("\e[1m", &sbuf);
+		strbuf_puts("Reblog by ", &sbuf);
+		strbuf_puts(sname, &sbuf);
 		// dname(表示名)が空の場合は括弧を表示しない
-		if (dname[0] != '\0') fprintf(stdout, " (%s)", dname);
-		fputs("\n", stdout);
+		if (dname[0] != '\0') {
+			strbuf_puts(" (", &sbuf);
+			strbuf_puts(dname, &sbuf);
+			strbuf_puts(")", &sbuf);
+		}
+		strbuf_puts("\n", &sbuf);
+		strbuf_puts("\e[0m", &sbuf);
 		//wattroff(scr, COLOR_PAIR(3));
 		stream_event_update(reblog);
 		return;
@@ -320,35 +438,37 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 	
 	// 誰からか[ screen_name(display_name) ]を表示
 	//wattron(scr, COLOR_PAIR(1)|A_BOLD);
-	fputs(sname, stdout);
+	strbuf_puts("\e[1m", &sbuf);
+	strbuf_puts(sname, &sbuf);
 	//wattroff(scr, COLOR_PAIR(1)|A_BOLD);
 	
 	// dname(表示名)が空の場合は括弧を表示しない
 	if (dname[0] != '\0') {
-		//wattron(scr, COLOR_PAIR(2));
-		fprintf(stdout, " (%s)", dname);
-		//wattroff(scr, COLOR_PAIR(2));
+		strbuf_puts(" (", &sbuf);
+		strbuf_puts(dname, &sbuf);
+		strbuf_puts(")", &sbuf);
 	}
+	strbuf_puts("\e[0m", &sbuf);
 	
 	if(strcmp(vstr, "public")) {
 		int vtyp = strcmp(vstr, "unlisted");
 		//wattron(scr, COLOR_PAIR(3)|A_BOLD);
-		fputs(" ", stdout);
+		strbuf_puts(" ", &sbuf);
 		if(noemojiflag) {
 			if(!strcmp(vstr, "unlisted")) {
-				fputs("<UNLIST>", stdout);
+				strbuf_puts("<UNLIST>", &sbuf);
 			} else if(!strcmp(vstr, "private")) {
-				fputs("<PRIVATE>", stdout);
+				strbuf_puts("<PRIVATE>", &sbuf);
 			} else {
-				fputs("<!DIRECT!>", stdout);
+				strbuf_puts("<!DIRECT!>", &sbuf);
 			}
 		} else {
 			if(!strcmp(vstr, "unlisted")) {
-				fputs("🔓", stdout);
+				strbuf_puts("🔓", &sbuf);
 			} else if(!strcmp(vstr, "private")) {
-				fputs("🔒", stdout);
+				strbuf_puts("🔒", &sbuf);
 			} else {
-				fputs("✉", stdout);
+				strbuf_puts("✉", &sbuf);
 			}
 		}
 		//wattroff(scr, COLOR_PAIR(3)|A_BOLD);
@@ -368,10 +488,10 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 	wattroff(scr, COLOR_PAIR(5));
 	waddstr(scr, "\n");*/
 
-	fputs(" - ", stdout);
-	fputs(datebuf, stdout);
+	strbuf_puts(" - ", &sbuf);
+	strbuf_puts(datebuf, &sbuf);
 
-	fputs("\n", stdout);
+	strbuf_puts("\n", &sbuf);
 	
 	const char *src = content->string_;
 	
@@ -385,11 +505,11 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 		// タグならタグフラグを立てる
 		if(*src == '<') ltgt = 1;
 		
-		if(ltgt && strncmp(src, "<br", 3) == 0) fputc('\n', stdout);
+		if(ltgt && strncmp(src, "<br", 3) == 0) strbuf_puts("\n", &sbuf);
 		if(ltgt && strncmp(src, "<p", 2) == 0) {
 			pcount++;
 			if(pcount >= 2) {
-				fputs("\n\n", stdout);
+				strbuf_puts("\n\n", &sbuf);
 			}
 		}
 		
@@ -398,39 +518,39 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 			// 文字実体参照の処理
 			if(*src == '&') {
 				if(strncmp(src, "&amp;", 5) == 0) {
-					fputc('&', stdout);
+					strbuf_putc('&', &sbuf);
 					src += 4;
 				}
 				else if(strncmp(src, "&lt;", 4) == 0) {
-					fputc('<', stdout);
+					strbuf_putc('<', &sbuf);
 					src += 3;
 				}
 				else if(strncmp(src, "&gt;", 4) == 0) {
-					fputc('>', stdout);
+					strbuf_putc('>', &sbuf);
 					src += 3;
 				}
 				else if(strncmp(src, "&quot;", 6) == 0) {
-					fputc('\"', stdout);
+					strbuf_putc('\"', &sbuf);
 					src += 5;
 				}
 				else if(strncmp(src, "&apos;", 6) == 0) {
-					fputc('\'', stdout);
+					strbuf_putc('\'', &sbuf);
 					src += 5;
 				}
 				else if(strncmp(src, "&#39;", 5) == 0) {
-					fputc('\'', stdout);
+					strbuf_putc('\'', &sbuf);
 					src += 4;
 				}
 			} else {
 				// 通常文字
-				fputc(*((unsigned char *)src), stdout);
+				strbuf_putc(*((unsigned char *)src), &sbuf);
 			}
 		}
 		if(*src == '>') ltgt = 0;
 		src++;
 	}
 	
-	fputs("\n", stdout);
+	strbuf_puts("\n", &sbuf);
 	
 	// 添付メディアのURL表示
 	struct sjson_node *media_attachments;
@@ -443,9 +563,9 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 			struct sjson_node *url;
 			read_json_fom_path(obj, "url", &url);
 			if(url->tag == SJSON_STRING) {
-				fputs(noemojiflag ? "<LINK>" : "🔗", stdout);
-				fputs(url->string_, stdout);
-				fputs("\n", stdout);
+				strbuf_puts(noemojiflag ? "<LINK>" : "🔗", &sbuf);
+				strbuf_puts(url->string_, &sbuf);
+				strbuf_puts("\n", &sbuf);
 			}
 		}
 	}
@@ -462,23 +582,28 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 			int l = ustrwidth(application_name->string_);
 		
 			// 右寄せにするために空白を並べる
-			for(int i = 0; i < term_w - (l + 4 + 1); i++) fputs(" ", stdout);
+			for(int i = 0; i < term_w - (l + 4 + 1); i++) strbuf_puts(" ", &sbuf);
 			
 			//wattron(scr, COLOR_PAIR(1));
-			fputs("- via ", stdout);
+			strbuf_puts("- via ", &sbuf);
 			//wattroff(scr, COLOR_PAIR(1));
 			//wattron(scr, COLOR_PAIR(2));
-			fputs(application_name->string_, stdout);
-			fputs("\n", stdout);
+			strbuf_puts(application_name->string_, &sbuf);
+			strbuf_puts("\n", &sbuf);
 			//wattroff(scr, COLOR_PAIR(2));
 		}
 	}
 	
-	fputs("\n", stdout);
+	strbuf_puts("\n", &sbuf);
 	/*wrefresh(scr);
 	
 	wmove(pad, pad_x, pad_y);
 	wrefresh(pad);*/
+
+	ptrqueue_enqueue(sbuf.buf, &gqueue);
+
+	//fputs(sbuf.buf, stdout);
+	//free(sbuf.buf);
 }
 
 // ストリーミングで受信したJSON(接続維持用データを取り除き一体化したもの)
@@ -1071,6 +1196,8 @@ retry1:
 	//scrollok(scr, 1);
 	
 	//wrefresh(scr);
+
+	ptrqueue_init(&gqueue);
 	
 	pthread_t stream_thread;
 	
@@ -1111,6 +1238,24 @@ retry1:
 	
 	while (1)
 	{
+		while(1) {
+			int err = 0;
+			uintptr_t p = ptrqueue_dequeue(&gqueue, &err);
+
+			if(err != 0) {
+				break;
+			}
+
+			char *s = (char *)p;
+			fputs(s, stdout);
+			free(s);
+		}
+
+		struct timespec req = {0, 20 * 1000000};
+		nanosleep(&req, NULL);
+
+		
+
 		/*wchar_t c;
 		wget_wch(pad, &c);
 		if(c == KEY_RESIZE) {
