@@ -25,6 +25,21 @@ char *selected_timeline = "home";
 
 #define CURL_USERAGENT "curl/" LIBCURL_VERSION
 
+// 可変長文字列バッファ
+// TODO：安全性のかけらもないのでそのうち直す
+typedef struct {
+	int siz;
+	char *buf;
+	int ptr;
+} strbuf_t;
+
+// ポインタキュー
+typedef struct {
+	int front, rear, count, size;
+  	uintptr_t *buf;
+	pthread_mutex_t mutex;
+} ptrqueue_t;
+
 // ストリーミングを受信する関数のポインタ
 void (*streaming_received_handler)(void);
 
@@ -44,7 +59,7 @@ void do_oauth(char *code, char *ck, char *cs);
 void do_toot(char *);
 
 // ストリーミングでのToot受信処理,stream_event_handlerへ代入
-void stream_event_update(struct sjson_node *);
+void stream_event_update(struct sjson_node *, strbuf_t *);
 
 // ストリーミングでの通知受信処理,stream_event_handlerへ代入
 void stream_event_notify(struct sjson_node *);
@@ -64,11 +79,106 @@ char domain_string[256];
 // コンフィグファイルパス構造体
 struct nanotodon_config config;
 
+// ポインタキュー
+ptrqueue_t gqueue;
+
 int term_w, term_h;
 int pad_x = 0, pad_y = 0;
 int monoflag = 0;
 int hidlckflag = 1;
 int noemojiflag = 0;
+
+void strbuf_init(strbuf_t *obj)
+{
+	obj->siz = 4096;
+	obj->buf = (char *)malloc(4096);
+	obj->ptr = 0;
+}
+
+void strbuf_puts(char *s, strbuf_t *obj)
+{
+	if(strlen(s) + 1 + obj->ptr > obj->siz) {
+		obj->buf = (char *)realloc(obj->buf, obj->siz + 4096);
+		obj->siz += 4096;
+	}
+
+	memcpy(obj->buf + obj->ptr, s, strlen(s) + 1);
+	obj->ptr += strlen(s);
+}
+
+void strbuf_putc(char c, strbuf_t *obj)
+{
+	char s[2] = { 0, 0 };
+	s[0] = c;
+
+	strbuf_puts(s, obj);
+}
+
+void ptrqueue_init(ptrqueue_t *obj)
+{
+	obj->front = 0;
+    obj->rear = 0;
+    obj->count = 0;
+	obj->buf = (uintptr_t *)malloc(sizeof(uintptr_t) * 1024);
+	obj->size = 1024;
+
+	pthread_mutex_init(&(obj->mutex), NULL);
+}
+
+int ptrqueue_is_full(ptrqueue_t *obj)
+{
+	return obj->count == obj->size ? 1 : 0;
+}
+
+int ptrqueue_is_empty(ptrqueue_t *obj)
+{
+	return obj->count == 0 ? 1 : 0;
+}
+
+int ptrqueue_enqueue(void *ptr, ptrqueue_t *obj)
+{
+	uintptr_t p = (uintptr_t)ptr;
+
+	int ret = 0;
+
+	pthread_mutex_lock(&(obj->mutex));
+
+	if (ptrqueue_is_full(obj)) {
+		ret = 1;
+	} else {
+		obj->buf[obj->rear++] = p;
+		obj->count++;
+		if (obj->rear == obj->size)
+			obj->rear = 0;
+	}
+
+	pthread_mutex_unlock(&(obj->mutex));
+
+	return ret;
+}
+
+uintptr_t ptrqueue_dequeue(ptrqueue_t *obj, int *err)
+{
+	pthread_mutex_lock(&(obj->mutex));
+
+	uintptr_t ret = NULL;
+
+	if (ptrqueue_is_empty(obj)) {
+		if(err != NULL) *err = 1;
+		ret = NULL;
+	} else {
+		uintptr_t p = obj->buf[obj->front++];
+		obj->count--;
+		if(err != NULL) *err = 0;
+		if (obj->front == obj->size)
+			obj->front = 0;
+		ret = p;
+	}
+	
+	pthread_mutex_unlock(&(obj->mutex));
+
+	return ret;
+}
 
 // Unicode文字列の幅を返す(半角文字=1)
 int ustrwidth(const char *str)
@@ -258,7 +368,7 @@ void stream_event_notify(struct sjson_node *jobj_from_string)
 	
 	// 通知対象のTootを表示,Follow通知だとtypeがNULLになる
 	if(type != SJSON_NULL && exist_status) {
-		stream_event_update(status);
+		stream_event_update(status, NULL);
 	}
 	
 	fputs("\n", stdout);
@@ -268,116 +378,9 @@ void stream_event_notify(struct sjson_node *jobj_from_string)
 	wrefresh(pad);*/
 }
 
-// TODO：安全性のかけらもないのでそのうち直す
-typedef struct {
-	int siz;
-	char *buf;
-	int ptr;
-} strbuf_t;
-
-void strbuf_init(strbuf_t *obj)
-{
-	obj->siz = 4096;
-	obj->buf = (char *)malloc(4096);
-	obj->ptr = 0;
-}
-
-void strbuf_puts(char *s, strbuf_t *obj)
-{
-	if(strlen(s) + 1 + obj->ptr > obj->siz) {
-		obj->buf = (char *)realloc(obj->buf, obj->siz + 4096);
-		obj->siz += 4096;
-	}
-
-	memcpy(obj->buf + obj->ptr, s, strlen(s) + 1);
-	obj->ptr += strlen(s);
-}
-
-void strbuf_putc(char c, strbuf_t *obj)
-{
-	char s[2] = { 0, 0 };
-	s[0] = c;
-
-	strbuf_puts(s, obj);
-}
-
-typedef struct {
-	int front, rear, count, size;
-  	uintptr_t *buf;
-	pthread_mutex_t mutex;
-} ptrqueue_t;
-
-void ptrqueue_init(ptrqueue_t *obj)
-{
-	obj->front = 0;
-    obj->rear = 0;
-    obj->count = 0;
-	obj->buf = (uintptr_t *)malloc(sizeof(uintptr_t) * 1024);
-	obj->size = 1024;
-
-	pthread_mutex_init(&(obj->mutex), NULL);
-}
-
-int ptrqueue_is_full(ptrqueue_t *obj)
-{
-	return obj->count == obj->size ? 1 : 0;
-}
-
-int ptrqueue_is_empty(ptrqueue_t *obj)
-{
-	return obj->count == 0 ? 1 : 0;
-}
-
-int ptrqueue_enqueue(void *ptr, ptrqueue_t *obj)
-{
-	uintptr_t p = (uintptr_t)ptr;
-
-	int ret = 0;
-
-	pthread_mutex_lock(&(obj->mutex));
-
-	if (ptrqueue_is_full(obj)) {
-		ret = 1;
-	} else {
-		obj->buf[obj->rear++] = p;
-		obj->count++;
-		if (obj->rear == obj->size)
-			obj->rear = 0;
-	}
-
-	pthread_mutex_unlock(&(obj->mutex));
-
-	return ret;
-}
-
-uintptr_t ptrqueue_dequeue(ptrqueue_t *obj, int *err)
-{
-	pthread_mutex_lock(&(obj->mutex));
-
-	uintptr_t ret = NULL;
-
-	if (ptrqueue_is_empty(obj)) {
-		if(err != NULL) *err = 1;
-		ret = NULL;
-	} else {
-		uintptr_t p = obj->buf[obj->front++];
-		obj->count--;
-		if(err != NULL) *err = 0;
-		if (obj->front == obj->size)
-			obj->front = 0;
-		ret = p;
-	}
-	
-	pthread_mutex_unlock(&(obj->mutex));
-
-	return ret;
-}
-
-ptrqueue_t gqueue;
-
 // ストリーミングでのToot受信処理,stream_event_handlerへ代入
 #define DATEBUFLEN	40
-void stream_event_update(struct sjson_node *jobj_from_string)
+void stream_event_update(struct sjson_node *jobj_from_string, strbuf_t *pbuf)
 {
 	struct sjson_node *content, *screen_name, *display_name, *reblog, *visibility;
 	const char *sname, *dname, *vstr;
@@ -414,7 +417,11 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 
 	strbuf_t sbuf;
 
-	strbuf_init(&sbuf);
+	if(pbuf != NULL) {
+		sbuf = *pbuf;
+	} else {
+		strbuf_init(&sbuf);
+	}
 	
 	// ブーストで回ってきた場合はその旨を表示
 	if(type != SJSON_NULL) {
@@ -432,7 +439,7 @@ void stream_event_update(struct sjson_node *jobj_from_string)
 		strbuf_puts("\n", &sbuf);
 		strbuf_puts("\e[0m", &sbuf);
 		//wattroff(scr, COLOR_PAIR(3));
-		stream_event_update(reblog);
+		stream_event_update(reblog, &sbuf);
 		return;
 	}
 	
@@ -954,7 +961,7 @@ void get_timeline(void)
 		for (int i = sjson_child_count(jobj_from_string) - 1; i >= 0; i--) {
 			struct sjson_node *obj = sjson_find_element(jobj_from_string, i);
 			
-			stream_event_update(obj);
+			stream_event_update(obj, NULL);
 		}
 	}
 	
