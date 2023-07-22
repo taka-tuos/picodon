@@ -1255,7 +1255,7 @@ retry1:
 
 			char *s = (char *)p;
 			fputs(s, stdout);
-			free(s);
+			//free(s);
 		}
 
 		struct timespec req = {0, 20 * 1000000};
